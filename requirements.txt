@@ -1,0 +1,16 @@
+streamlit
+sentence-transformers
+pypdf
+langchain
+faiss-cpu
+groq
+python-dotenv
+IProgress
+requests
+rank_bm25
+huggingface_hub
+torch 
+torchvision
+transformers
+Pillow
+huggingface_hub[hf_xet]
