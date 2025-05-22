@@ -25,7 +25,7 @@ jobs:
 
       - name: Install dev tools
         run: |
-          pip install flake8 pytest reportlab
+          pip install pytest reportlab
 
       - name: Run tests
         run: pytest -q
