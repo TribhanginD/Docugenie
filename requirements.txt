@@ -15,3 +15,4 @@ transformers
 Pillow
 huggingface_hub[hf_xet]
 pytest
+reportlab
