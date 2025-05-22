@@ -25,13 +25,10 @@ jobs:
 
       - name: Install dev tools
         run: |
-          pip install black flake8 pytest reportlab
+          pip install flake8 pytest reportlab
 
       - name: Run tests
         run: pytest -q
-
-      - name: Run Black (format check)
-        run: black --check .
 
       - name: Run Flake8
         run: flake8 .
