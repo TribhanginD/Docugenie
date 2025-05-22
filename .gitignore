@@ -3,3 +3,4 @@
 /providers/__pycache__
 /.venv
 .env
+*.pyc

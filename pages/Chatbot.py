@@ -169,7 +169,8 @@ def retrieve_from_cache(v: np.ndarray, thr: float = 0.5):
 
 def update_cache(q: str, v: np.ndarray, resps: List[str]):
     cache['queries'].append(q)
-    cache['embeddings'].append(v.tolist())
+    emb_list = v.tolist() if hasattr(v, "tolist") else list(v)
+    cache['embeddings'].append(emb_list)
     cache['responses'].append(resps)
     cache['model_name'] = MODEL_NAME
     save_cache(cache)
