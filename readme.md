@@ -153,7 +153,7 @@ All tunable parameters live in **`retrieval_config.json`**. For example:
   "faiss_weight": 0.6,
   "bm25_top_k": 20,
   "cross_encoder_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
-  "self_ask_model": "gemma2-9b-it"
+  "self_ask_model": "llama-3.3-70b-versatile"
 }
 ```
 
@@ -173,6 +173,57 @@ _Run tests locally:_
 
 ```bash
 pytest --maxfail=1 --disable-warnings -q
+```
+
+### Accuracy evaluation
+
+```bash
+python scripts/evaluate_accuracy.py --dataset path/to/dataset.json
+```
+
+Supply a JSON list of question/reference pairs (see `tests/eval_dataset.example.json`).
+The harness reuses DocuGenie’s retrieval pipeline, optionally invokes your
+configured LLM provider, and reports macro/weighted BERTScore plus retrieval hit
+rate.
+
+### Standard evaluation dataset & toolkit
+
+DocuGenie includes a ready-to-run evaluation pack in `evaluation/`:
+
+* `evaluation/standard_eval_dataset.jsonl` – 16 curated question/reference pairs grounded in the sample Meta Store PDF.
+* `scripts/build_eval_brief.py` – renders `evaluation/DocuGenie_Eval_Brief.pdf`, summarising the dataset and tooling.
+* `scripts/run_ragas.py` – optional RAGAS metrics (Answer Relevancy, Faithfulness, Context Precision/Recall). Install with `pip install ragas datasets` and set `OPENAI_API_KEY`.
+* `scripts/prepare_hotpot_eval.py` – fetches a HotpotQA subset, converts supporting passages to PDFs, and produces a ready-to-use JSONL dataset.
+
+Generate the briefing PDF:
+
+```bash
+python3 scripts/build_eval_brief.py
+```
+
+Run the built-in BERTScore harness against the standard dataset:
+
+```bash
+PYTHONPATH=. python3 scripts/evaluate_accuracy.py \
+  --dataset evaluation/standard_eval_dataset.jsonl \
+  --output evaluation/bert_score_report.json
+```
+
+Run the optional RAGAS suite (requires OpenAI-compatible credentials):
+
+```bash
+pip install ragas datasets
+PYTHONPATH=. python3 scripts/run_ragas.py \
+  --dataset evaluation/standard_eval_dataset.jsonl \
+  --output evaluation/ragas_report.json
+```
+
+Prepare a HotpotQA-based dataset (requires `pip install datasets reportlab`):
+
+```bash
+PYTHONPATH=. python3 scripts/prepare_hotpot_eval.py \
+  --split validation[:100] \
+  --count 50
 ```
 
 * * *

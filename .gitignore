@@ -4,3 +4,11 @@
 /.venv
 .env
 *.pyc
+/input_files
+/input_files
+/node_modules
+/tests
+/tests
+/tests
+/evaluation
+tests/test_feedback_tuning.py

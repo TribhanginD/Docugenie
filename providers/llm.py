@@ -89,7 +89,7 @@ class HFProvider(LLMProvider):
     def generate(
         self,
         messages: List[Dict],
-        model: str = None,    # ignored, we use self.model_name
+        model: str = None,
         temperature: float = 0.7,
         top_p: float = 0.5,
         **kwargs
@@ -97,22 +97,72 @@ class HFProvider(LLMProvider):
         # Forward the messages straight into the HF Hub chat endpoint
 
         # 🔧 Clamp top_p into the valid (0.0, 1.0) range for HF Inference
-       if not (0.0 < top_p < 1.0):
-        top_p = 0.9
+        if not (0.0 < top_p < 1.0):
+            top_p = 0.9
 
+        target_model = model or self.model_name
         logging.info(
-            f"HFProvider: calling {self.model_name} via provider={self.provider}"
+            f"HFProvider: calling {target_model} via provider={self.provider}"
         )
         completion = self.client.chat.completions.create(
-            model=self.model_name,
+            model=target_model,
             messages=messages,
             temperature=temperature,
-           top_p=top_p,
+            top_p=top_p,
             **kwargs
         )
 
         # Extract the assistant’s reply
         text = completion.choices[0].message.content.strip()
         # HF Hub doesn’t currently return token usage, so we only note the model used
-        usage = {"model_used": self.model_name}
+        usage = {"model_used": target_model}
+        return text, usage
+
+
+class GeminiProvider(LLMProvider):
+    """Google Gemini provider via google-generativeai."""
+
+    def __init__(self, api_key: str = None, model_name: str = None):
+        try:
+            import google.generativeai as genai  # type: ignore
+        except Exception as exc:  # pragma: no cover - import guard
+            raise RuntimeError(
+                "google-generativeai is required. Install with `pip install google-generativeai`."
+            ) from exc
+        self._genai = genai
+        self.api_key = api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if not self.api_key:
+            raise ValueError("Missing GOOGLE_API_KEY (or GEMINI_API_KEY) for GeminiProvider.")
+        self._genai.configure(api_key=self.api_key)
+        self.model_name = model_name or os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
+
+    def generate(
+        self,
+        messages: List[Dict],
+        model: str = None,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        **kwargs
+    ) -> Tuple[str, Dict]:
+        # Gemini doesn't use chat roles the same way; concatenate messages into a single prompt.
+        prompt_parts: List[str] = []
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            if role == "system":
+                prompt_parts.append(f"[System]\n{content}\n\n")
+            elif role == "assistant":
+                prompt_parts.append(f"[Assistant]\n{content}\n\n")
+            else:
+                prompt_parts.append(f"[User]\n{content}\n\n")
+        prompt = "".join(prompt_parts)
+
+        mdl = self._genai.GenerativeModel(model or self.model_name)
+        resp = mdl.generate_content(prompt, generation_config={
+            "temperature": temperature,
+            "top_p": top_p,
+            **{k: v for k, v in kwargs.items() if k not in {"messages"}}
+        })
+        text = (resp.text or "").strip()
+        usage = {"model_used": model or self.model_name}
         return text, usage
