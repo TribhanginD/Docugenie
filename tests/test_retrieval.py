@@ -12,18 +12,30 @@ def dummy_corpus():
     ]
 
 @pytest.fixture
-def bm25_and_idx(dummy_corpus):
+def bm25_idx_and_meta(dummy_corpus):
     bm25, faiss_idx = init_retrievers(dummy_corpus, force_rebuild=True)
-    return bm25, faiss_idx
+    metadata = [
+        {"doc": f"doc_{i}.pdf", "page": 1, "chunk_size": 1000, "chunk_overlap": 400}
+        for i, _ in enumerate(dummy_corpus)
+    ]
+    return bm25, faiss_idx, metadata
 
-def test_bm25_scores(dummy_corpus, bm25_and_idx):
-    bm25, idx = bm25_and_idx
+def test_bm25_scores(dummy_corpus, bm25_idx_and_meta):
+    bm25, idx, _ = bm25_idx_and_meta
     scores = bm25.get_scores("quick fox".split())
     # highest score for first doc
     assert np.argmax(scores) == 0
 
-def test_hybrid_retrieval(dummy_corpus, bm25_and_idx):
-    bm25, idx = bm25_and_idx
-    chunks = retrieve_relevant_chunks("lazy dog", bm25, idx, dummy_corpus, top_k=2, alpha=0.5)
-    # “lazy dog” appears in the second doc
-    assert dummy_corpus[1] in chunks
+def test_hybrid_retrieval(dummy_corpus, bm25_idx_and_meta):
+    bm25, idx, metadata = bm25_idx_and_meta
+    chunks = retrieve_relevant_chunks(
+        "lazy dog",
+        bm25,
+        idx,
+        dummy_corpus,
+        metadata,
+        top_k=2,
+        alpha=0.5
+    )
+    texts = [ch["text"] for ch in chunks]
+    assert dummy_corpus[1] in texts

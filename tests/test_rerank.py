@@ -11,8 +11,20 @@ def mock_cross_encoder(monkeypatch):
 
 def test_cross_encoder_rerank(dummy_corpus, bm25_and_idx):
     bm25, idx = bm25_and_idx
+    metadata = [
+        {"doc": f"doc_{i}.pdf", "page": 1, "chunk_size": 900, "chunk_overlap": 300}
+        for i, _ in enumerate(dummy_corpus)
+    ]
     # after monkeypatch, reranking picks longest passages
-    top_chunks = retrieve_relevant_chunks("ipsum", bm25, idx, dummy_corpus, top_k=3, alpha=0.5)
+    top_chunks = retrieve_relevant_chunks(
+        "ipsum",
+        bm25,
+        idx,
+        dummy_corpus,
+        metadata,
+        top_k=3,
+        alpha=0.5
+    )
     # ensure we get back exactly 5 or fewer unique items
     assert isinstance(top_chunks, list)
     assert len(top_chunks) <= 5
