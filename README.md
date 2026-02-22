@@ -1,6 +1,5 @@
 ---
 title: DocuGenie
-emoji: 🧞
 colorFrom: indigo
 colorTo: purple
 sdk: docker
