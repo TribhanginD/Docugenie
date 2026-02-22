@@ -8,7 +8,7 @@ app_port: 7860
 pinned: false
 ---
 
-# DocuGenie 🧞
+# DocuGenie 
 
 A production-grade, interactive document Q&A assistant powered by Retrieval-Augmented Generation (RAG).
 
