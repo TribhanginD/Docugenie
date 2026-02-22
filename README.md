@@ -1,12 +1,3 @@
----
-title: DocuGenie
-colorFrom: indigo
-colorTo: purple
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # DocuGenie 
 
 A production-grade, interactive document Q&A assistant powered by Retrieval-Augmented Generation (RAG).
