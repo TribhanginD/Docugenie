@@ -84,8 +84,17 @@ def init_engine():
         host=os.getenv("REDIS_HOST", "localhost"),
         port=int(os.getenv("REDIS_PORT", 6379))
     )
-    embedding_provider = GeminiEmbeddingProvider()
-    
+
+    # Embedding provider: requires GOOGLE_API_KEY. Gracefully skip if absent.
+    embedding_provider = None
+    if os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"):
+        try:
+            embedding_provider = GeminiEmbeddingProvider()
+        except Exception as e:
+            logger.warning(f"Embedding provider unavailable: {e}")
+    else:
+        logger.warning("No GOOGLE_API_KEY found — document embedding disabled. Upload & retrieval will not work.")
+
     _state["engine"] = RAGEngine(
         vector_db=vector_db,
         reranker=reranker,
@@ -192,6 +201,8 @@ async def query_documents(request: QueryRequest):
             citations=formatted_citations,
             usage=usage
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Error processing query")
         raise HTTPException(status_code=500, detail=str(e))
