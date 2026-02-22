@@ -1,14 +1,25 @@
-/__pycache__
-/assets
-/providers/__pycache__
-/.venv
-.env
+# Python
+__pycache__/
 *.pyc
-/input_files
-/input_files
-/node_modules
-/tests
-/tests
-/tests
-/evaluation
-tests/test_feedback_tuning.py
+*.pyo
+*.pyd
+.venv/
+*.egg-info/
+
+# Env & secrets
+.env
+
+# Runtime artifacts
+input_files/
+*.log
+*.pkl
+
+# Node / Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+
+# Tests
+tests/

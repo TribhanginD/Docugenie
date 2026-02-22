@@ -1,4 +1,4 @@
-name: CI
+name: DocuGenie CI/CD
 
 on:
   push:
@@ -7,27 +7,30 @@ on:
     branches: [ main ]
 
 jobs:
-  test-and-lint:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install qdrant-client redis sentence-transformers prometheus_client pytest
+    - name: Run tests
+      run: |
+        pytest -v
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.11
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install --no-cache-dir -r requirements.txt
-
-      - name: Install dev tools
-        run: |
-          pip install pytest reportlab
-
-      - name: Run tests
-        run: pytest -q
-
-
+  build-and-push:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Docker image
+      run: |
+        docker build -t docugenie:latest .
+    # Add push steps for your container registry here

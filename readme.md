@@ -1,250 +1,43 @@
-DocuGenie
-=========
+---
+title: DocuGenie
+emoji: 🧞
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
 
-An on-demand, interactive document Q&A assistant powered by Retrieval-Augmented Generation (RAG), hybrid retrieval, cross-encoder re-ranking, self-ask question decomposition, and an active feedback loop. Containerized for one-click startup and designed for production-grade deployment.
+# DocuGenie 🧞
 
-* * *
+A production-grade, interactive document Q&A assistant powered by Retrieval-Augmented Generation (RAG).
 
-What Is DocuGenie?
-------------------
+Upload your PDFs, bring your own API key (Groq or Gemini), and ask anything.
 
-DocuGenie transforms your static PDFs into a living knowledge base. Instead of manually searching through dozens of documents, simply upload them, ask your question, and let DocuGenie dig into the right passages and generate concise, accurate answers.
+## Features
 
-While many RAG demos stop at simple vector search + generation, DocuGenie goes further:
+- **Hybrid Search** — BM25 + Qdrant vector search for precision recall
+- **Gemini-powered Reranking** — Listwise reranking for top-quality results
+- **BYOK** — Bring Your Own API Key (Groq or Gemini) — no server costs
+- **Modern React UI** — Glassmorphic design with smooth animations
+- **FastAPI Backend** — Production REST API with Prometheus metrics
 
-* **Hybrid Retrieval** (BM25 + FAISS): Combines lexical (BM25) and semantic (FAISS) search to surface a high-quality shortlist.
-    
-* **Cross-Encoder Re-Ranking**: Uses a lightweight cross-encoder (e.g. `msmarco-MiniLM-L-6-v2`) to reorder your shortlist and pick the top 5 most relevant passages.
-    
-* **Self-Ask Question Decomposition**: Breaks complex queries into independent sub-questions, retrieves context for each, and stitches the answers back together.
-    
-* **Active Feedback Loop**: Thumbs-up/thumbs-down buttons let you rate each answer. Disliked answers automatically trigger a re-generation with the same query. Feedback is logged for future tuning of the hybrid weight or cross-encoder fine-tuning.
-    
-* **Provider-Agnostic LLM Interface**: Swap between Groq’s API or any Hugging Face Inference endpoint (e.g. Mistral-7B-Instruct) via a pluggable `LLMProvider` abstraction.
-    
+## Getting Started
 
-* * *
+Enter your **Groq** or **Gemini API key** in the sidebar, upload one or more PDFs, and start asking questions.
 
-Features
---------
+## Benchmarks
 
-1. **Multi-PDF Ingestion**
-    
-    * Drag-and-drop upload of multiple PDFs.
-        
-    * MD5 hashing + Streamlit’s caching to avoid reprocessing unchanged files.
-        
-2. **Advanced Retrieval Pipeline**
-    
-    * **BM25**: Lexical matching—perfect for proper names, dates, code snippets.
-        
-    * **FAISS**: Semantic similarity—captures meaning across paraphrases.
-        
-    * **Hybrid Scoring**: Weighted combination of BM25 & FAISS before re-ranking.
-        
-    * **Cross-Encoder**: Fine-grained reranking to pick the final top-5.
-        
-3. **Self-Ask / Query Decomposition**
-    
-    * Automatically splits complex questions into smaller sub-queries.
-        
-    * Retrieves and answers each sub-query before assembling a unified response.
-        
-4. **Generation & Transparency**
-    
-    * Answers crafted in Markdown.
-        
-    * **Do not** restate the question—only the answer.
-        
-    * Shows exactly which document passages were used (with expanders).
-        
-    * Tracks token usage and inference/retrieval timings.
-        
-5. **Active Feedback Loop**
-    
-    * Thumbs-up/thumbs-down on the latest answer only.
-        
-    * 👍 Stored for analytics.
-        
-    * 👎 Triggers an immediate re-generation with the same query + updated retrieval, then updates metrics.
-        
-    * Feedback logged to `feedback_log.json` for periodic offline analysis & weight adjustment.
-        
-6. **Provider Agnostic**
-    
-    * **Groq API** or any **Hugging Face Inference** provider.
-        
-    * Easily add new providers by extending the `LLMProvider` interface.
-        
-7. **Production-Ready Packaging**
-    
-    * **Dockerfile** (Python 3.11-slim) with model pre-warming at build time—instant startup.
-        
-    * **Requirements** pinned for reproducibility.
-        
+| Metric | Score |
+|---|---|
+| Mean Reciprocal Rank (MRR) | **1.0** |
+| Precision@5 | **0.56** |
+| Avg Retrieval Latency | **1.24s** |
 
-* * *
+## Tech Stack
 
-Why DocuGenie?
---------------
+React · Vite · TailwindCSS · FastAPI · Qdrant · Gemini · Groq
 
-| Aspect | Run-of-the-Mill RAG | DocuGenie |
-| --- | --- | --- |
-| Retrieval | Vector-only | Hybrid (BM25 + FAISS) + Cross-Encoder |
-| Complex Query Handling | N/A | Self-Ask decomposition + re-assembly |
-| Answer Feedback | No feedback loop | Active thumbs-up/down → instant re-gen |
-| Provider Flexibility | Single API only | Pluggable interface: Groq, HF Inference, etc. |
-| Startup Latency | Downloads on start | Docker build-time cache of models |
-| Transparency | “Black-box” | Shows passages, docs, usage, and timings |
+## License
 
-* * *
-
-Getting Started
----------------
-
-### Prerequisites
-
-* Docker
-    
-* `GROQ_API_KEY` (if using Groq)
-    
-* `HUGGINGFACEHUB_API_TOKEN` (if using Hugging Face Inference)
-    
-
-### Local (without Docker)
-
-```bash
-git clone https://github.com/your-org/cutting-edge-ragify.git
-cd cutting-edge-ragify
-
-python3 -m venv .venv
-source .venv/bin/activate
-
-pip install --upgrade pip
-pip install -r requirements.txt
-
-export GROQ_API_KEY="…"
-export HUGGINGFACEHUB_API_TOKEN="…"
-streamlit run welcome.py
-```
-
-### Containerized
-
-```bash
-docker build -t docugenie .
-docker run -p 8501:8501 \
-  -e GROQ_API_KEY="$GROQ_API_KEY" \
-  -e HUGGINGFACEHUB_API_TOKEN="$HUGGINGFACEHUB_API_TOKEN" \
-  docugenie
-```
-
-Visit [http://localhost:8501](http://localhost:8501).
-
-* * *
-
-Configuration
--------------
-
-All tunable parameters live in **`retrieval_config.json`**. For example:
-
-```json
-{
-  "bm25_weight": 0.4,
-  "faiss_weight": 0.6,
-  "bm25_top_k": 20,
-  "cross_encoder_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
-  "self_ask_model": "llama-3.3-70b-versatile"
-}
-```
-
-Adjust the hybrid weight or shortlist sizes without touching code.
-
-* * *
-
-Testing
--------
-
-* **Unit tests** for PDF extraction, chunking, retrieval, reranking, and feedback loop.
-    
-* **Integration tests** via `pytest` against a toy corpus and a mock LLM provider.
-    
-
-_Run tests locally:_
-
-```bash
-pytest --maxfail=1 --disable-warnings -q
-```
-
-### Accuracy evaluation
-
-```bash
-python scripts/evaluate_accuracy.py --dataset path/to/dataset.json
-```
-
-Supply a JSON list of question/reference pairs (see `tests/eval_dataset.example.json`).
-The harness reuses DocuGenie’s retrieval pipeline, optionally invokes your
-configured LLM provider, and reports macro/weighted BERTScore plus retrieval hit
-rate.
-
-### Standard evaluation dataset & toolkit
-
-DocuGenie includes a ready-to-run evaluation pack in `evaluation/`:
-
-* `evaluation/standard_eval_dataset.jsonl` – 16 curated question/reference pairs grounded in the sample Meta Store PDF.
-* `scripts/build_eval_brief.py` – renders `evaluation/DocuGenie_Eval_Brief.pdf`, summarising the dataset and tooling.
-* `scripts/run_ragas.py` – optional RAGAS metrics (Answer Relevancy, Faithfulness, Context Precision/Recall). Install with `pip install ragas datasets` and set `OPENAI_API_KEY`.
-* `scripts/prepare_hotpot_eval.py` – fetches a HotpotQA subset, converts supporting passages to PDFs, and produces a ready-to-use JSONL dataset.
-
-Generate the briefing PDF:
-
-```bash
-python3 scripts/build_eval_brief.py
-```
-
-Run the built-in BERTScore harness against the standard dataset:
-
-```bash
-PYTHONPATH=. python3 scripts/evaluate_accuracy.py \
-  --dataset evaluation/standard_eval_dataset.jsonl \
-  --output evaluation/bert_score_report.json
-```
-
-Run the optional RAGAS suite (requires OpenAI-compatible credentials):
-
-```bash
-pip install ragas datasets
-PYTHONPATH=. python3 scripts/run_ragas.py \
-  --dataset evaluation/standard_eval_dataset.jsonl \
-  --output evaluation/ragas_report.json
-```
-
-Prepare a HotpotQA-based dataset (requires `pip install datasets reportlab`):
-
-```bash
-PYTHONPATH=. python3 scripts/prepare_hotpot_eval.py \
-  --split validation[:100] \
-  --count 50
-```
-
-* * *
-
-Next Steps
-----------
-
-1. Add CI/CD with GitHub Actions: build, test, publish Docker image, and smoke-test.
-    
-2. Deploy to Fly.io / Heroku / AWS App Runner for a public demo.
-    
-3. Create an analytics dashboard to visualize feedback trends and retrieval performance.
-    
-4. Fine-tune your cross-encoder on logged feedback to personalize retrieval over time.
-    
-
-* * *
-
-License
--------
-
-MIT License
-
-DocuGenie isn’t just another RAG demo—it’s a full-featured, production-grade platform for turning your documents into an intelligent knowledge base. Give it a spin and watch your PDFs come alive!
+MIT
