@@ -27,6 +27,12 @@ class RAGEngine:
     def retrieve(self, query: str, top_k: int = 5, use_reranker: bool = True) -> Dict[str, Any]:
         start_time = time.time()
         
+        if self.embedding_provider is None:
+            raise ValueError(
+                "No embedding provider available. "
+                "Please set GOOGLE_API_KEY to enable document retrieval."
+            )
+
         # 1. Generate Query Vector
         query_vector = self.embedding_provider.encode([query], task_type="retrieval_query")[0].tolist()
         

@@ -2,7 +2,11 @@ import os
 import logging
 import time
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv
+
+load_dotenv()  # Load .env file for local development
+
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -132,16 +136,63 @@ class QueryResponse(BaseModel):
     usage: Dict[str, Any]
 
 @app.post("/ingest")
-async def ingest_documents(files: List[Any]):
-    # Note: In a real app, use UploadFile. For this MVP, we'll assume PDF processing.
-    # This endpoint will trigger the core indexing logic.
+async def ingest_documents(files: List[UploadFile]):
+    """Accept one or more PDFs, extract text, chunk by page, embed, and index into Qdrant."""
     try:
         engine = init_engine()
-        # Ingest logic would go here, connecting to process_single_pdf etc.
-        # For now, we'll return a placeholder success.
-        return {"status": "success", "message": "Documents indexed successfully."}
+        if engine is None:
+            raise HTTPException(status_code=503, detail="RAG engine not initialized. Check GOOGLE_API_KEY.")
+        if engine.embedding_provider is None:
+            raise HTTPException(status_code=503, detail="Embedding provider not available. Set GOOGLE_API_KEY.")
+
+        import pdfplumber, io
+        all_texts, all_meta = [], []
+
+        for file in files:
+            raw = await file.read()
+            doc_name = file.filename or "unknown.pdf"
+            try:
+                with pdfplumber.open(io.BytesIO(raw)) as pdf:
+                    for page_num, page in enumerate(pdf.pages, start=1):
+                        text = page.extract_text() or ""
+                        text = text.strip()
+                        if not text:
+                            continue
+                        # Chunk long pages into ~500-char segments
+                        for chunk_start in range(0, len(text), 500):
+                            chunk = text[chunk_start:chunk_start + 500].strip()
+                            if chunk:
+                                all_texts.append(chunk)
+                                all_meta.append({
+                                    "text": chunk,
+                                    "doc": doc_name,
+                                    "page": page_num,
+                                })
+            except Exception as e:
+                logger.warning(f"Failed to parse {doc_name}: {e}")
+                continue
+
+        if not all_texts:
+            raise HTTPException(status_code=400, detail="No extractable text found in uploaded PDFs.")
+
+        # Embed all chunks
+        logger.info(f"Embedding {len(all_texts)} chunks from {len(files)} file(s)...")
+        vectors = engine.embedding_provider.encode(all_texts, task_type="retrieval_document")
+
+        # Upsert into Qdrant
+        engine.vector_db.upsert_chunks(vectors.tolist(), all_meta)
+
+        return {
+            "status": "success",
+            "chunks_indexed": len(all_texts),
+            "files": [f.filename for f in files],
+        }
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("Error during ingestion")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
@@ -170,16 +221,23 @@ async def query_documents(request: QueryRequest):
                 f"[Source {i+1}: {c.get('doc', 'unknown')} p.{c.get('page', '?')}]\n{c.get('text', '')}"
                 for i, c in enumerate(retrieval_data["results"])
             ])
-            prompt = (
-                f"You are DocuGenie, an expert document assistant. "
-                f"Answer the following question using ONLY the provided context. "
-                f"Be concise and cite your sources.\n\n"
-                f"Context:\n{context}\n\n"
-                f"Question: {request.query}\n\nAnswer:"
+            messages = [
+                {"role": "system", "content": (
+                    "You are DocuGenie, an expert document assistant. "
+                    "Answer the question using ONLY the provided context. Be concise and cite your sources."
+                )},
+                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {request.query}"},
+            ]
+            result = provider.generate(
+                messages,
+                model="gemini-2.0-flash" if request.provider == "Google Gemini" else "llama-3.3-70b-versatile",
             )
-            raw = provider.generate(prompt)
-            answer = raw if isinstance(raw, str) else raw.get("answer", str(raw))
-            usage = {"provider": request.provider or "default"}
+            # Both GroqProvider and GeminiProvider return (answer_str, usage_dict)
+            if isinstance(result, tuple):
+                answer, provider_usage = result
+            else:
+                answer, provider_usage = str(result), {}
+            usage = {"provider": request.provider or "default", **provider_usage}
 
         formatted_citations = [
             Citation(

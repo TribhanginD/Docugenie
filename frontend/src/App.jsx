@@ -3,7 +3,7 @@ import axios from 'axios';
 import Sidebar from './components/Sidebar';
 import Chat from './components/Chat';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = '';  // Empty = relative URL, works in both dev (proxied) and production
 
 function App() {
   const [provider, setProvider] = useState('Groq');
@@ -16,19 +16,24 @@ function App() {
   const [useContextual, setUseContextual] = useState(false);
   const [useHyDE, setUseHyDE] = useState(false);
 
-  // Auto-scroll chat (handled within Chat component, but here as backup)
-
   const handleUpload = async (e) => {
     const selectedFiles = Array.from(e.target.files);
+    if (!selectedFiles.length) return;
     setFiles(prev => [...prev, ...selectedFiles]);
-
     setIsProcessing(true);
+
     try {
-      // Mocking ingestion for the demo
-      // In a real app: await axios.post(`${API_BASE}/ingest`, formData)
-      await new Promise(r => setTimeout(r, 1500));
+      const formData = new FormData();
+      selectedFiles.forEach(f => formData.append('files', f));
+      await axios.post(`${API_BASE}/ingest`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
     } catch (err) {
-      console.error("Ingestion failed:", err);
+      console.error("Ingestion failed:", err.response?.data?.detail || err.message);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `⚠️ PDF ingestion failed: ${err.response?.data?.detail || 'Check API key and try again.'}`
+      }]);
     } finally {
       setIsProcessing(false);
     }
