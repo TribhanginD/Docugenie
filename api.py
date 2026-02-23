@@ -32,12 +32,15 @@ app = FastAPI(
     version="2.0.0"
 )
 
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to DocuGenie - AI Platform Orchestrator is ACTIVE"}
+
 # Enable CORS for React development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, specify your frontend URL
     allow_credentials=True,
-    allow_methods=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
