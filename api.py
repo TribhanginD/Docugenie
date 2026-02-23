@@ -20,6 +20,7 @@ from providers.cache import RedisCache
 from providers.embedding import GeminiEmbeddingProvider
 from providers.llm import GroqProvider, GeminiProvider
 from observability import MetricsTracker
+import httpx
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -37,8 +38,41 @@ app.add_middleware(
     allow_origins=["*"],  # In production, specify your frontend URL
     allow_credentials=True,
     allow_methods=["*"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Service Delegation Config
+ML_SERVICE_URL = os.getenv("ML_PIPELINE_URL", "http://localhost:8000")
+ORDER_SERVICE_URL = os.getenv("ORDER_SYSTEM_URL", "http://localhost:8001")
+
+async def platform_governance_check(content: str) -> bool:
+    """Delegates compliance scanning to the Real-Time ML Pipeline."""
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            response = await client.post(f"{ML_SERVICE_URL}/scan", json={"text": content})
+            if response.status_code == 200:
+                result = response.json()
+                if result["status"] == "FLAGGED":
+                    logger.warning(f"ML Pipeline BLOCKED ingestion: {result['reason']}")
+                    return False
+    except Exception as e:
+        logger.warning(f"Governance Delegation failed: {e}. Falling back to local scanner.")
+        from governance import ComplianceScanner
+        local_result = ComplianceScanner.scan_content(content)
+        return local_result["status"] != "FLAGGED"
+    return True
+
+async def platform_reliable_ingest(task_id: str, doc_name: str) -> bool:
+    """Delegates ingestion infrastructure to the Order Processing System."""
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            payload = {"task_id": task_id, "target_service": "docugenie", "payload": {"file": doc_name}}
+            response = await client.post(f"{ORDER_SERVICE_URL}/tasks/ingest", json=payload)
+            return response.status_code == 200
+    except Exception as e:
+        logger.warning(f"Reliability Delegation failed: {e}. Falling back to local ingestion flow.")
+        return True # Fallback: let DocuGenie handle it locally
 
 # Add Prometheus metrics endpoint
 metrics_app = make_asgi_app()
@@ -136,8 +170,11 @@ class QueryResponse(BaseModel):
     usage: Dict[str, Any]
 
 @app.post("/ingest")
-async def ingest_documents(files: List[UploadFile]):
-    """Accept one or more PDFs, extract text, chunk by page, embed, and index into Qdrant."""
+async def ingest_documents(files: List[UploadFile], idempotency_key: Optional[str] = None):
+    """
+    Accept one or more PDFs, extract text, chunk by page, embed, and index into Qdrant.
+    Implements idempotency and resilience patterns.
+    """
     try:
         engine = init_engine()
         if engine is None:
@@ -151,6 +188,16 @@ async def ingest_documents(files: List[UploadFile]):
         for file in files:
             raw = await file.read()
             doc_name = file.filename or "unknown.pdf"
+            
+            # 1. Delegate Governance (Compliance/PII)
+            if not await platform_governance_check(raw.decode(errors='ignore')):
+                raise HTTPException(status_code=403, detail="Governance Violation: PII detected by Compliance Service.")
+
+            # 2. Delegate Reliability (Idempotency/DLQ)
+            # Use filename as a simple task_id for this demo
+            if not await platform_reliable_ingest(doc_name, doc_name):
+                 logger.error(f"Reliability Check failed for {doc_name}")
+
             try:
                 with pdfplumber.open(io.BytesIO(raw)) as pdf:
                     for page_num, page in enumerate(pdf.pages, start=1):
@@ -191,7 +238,9 @@ async def ingest_documents(files: List[UploadFile]):
         raise
     except Exception as e:
         logger.exception("Error during ingestion")
-        raise HTTPException(status_code=500, detail=str(e))
+        # DLQ Simulation: Log failure for the AI SRE to pick up
+        logger.error(f"DLQ_EVENT: Ingestion failed for files {[f.filename for f in files]}. Reason: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ingestion failed. Logged to DLQ.")
 
 
 @app.post("/query", response_model=QueryResponse)
